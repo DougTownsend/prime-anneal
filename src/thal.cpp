@@ -381,6 +381,8 @@ thal(const unsigned char *oligo_f,
         o->sec_struct=drawHairpin(bp, mh, ms, mode,a->temp, oligo1, oligo2, saltCorrection, oligo1_len, oligo2_len, _jmp_buf, o); /* if mode=THL_FAST or THL_DEBUG_F then return after printing basic therm data */
       } else {
          o->dg = _INFINITY;
+         o->dh = _INFINITY;
+         o->ds = 0;
           if((mode != THL_FAST) && (mode != THL_DEBUG_F) && (mode != THL_STRUCT))
             fputs("No secondary structure could be calculated\n",stderr);
       }
@@ -454,6 +456,8 @@ thal(const unsigned char *oligo_f,
       } else  {
          o->temp = 0.0;
          o->dg = _INFINITY;
+         o->dh = _INFINITY;
+         o->ds = 0;
          /* fputs("No secondary structure could be calculated\n",stderr); */
       }
       free(ps1);

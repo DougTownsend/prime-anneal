@@ -2,6 +2,7 @@
 #include <string>
 #include "thal.h"
 #include <mutex>
+#include <cstdlib>
 
 #ifndef EQ_HPP
 #define EQ_HPP
@@ -161,6 +162,8 @@ namespace primersim{
             mpfr_t c[19];
             mpfr_t c0[6];
             mpfr_t k[13];
+            mpfr_t spec_total;
+            mpfr_t nonspec_total;
             mpfr_t spec_fwd_amp;
             mpfr_t spec_rev_amp;
             mpfr_t nonspec_exp_amp;
@@ -239,8 +242,11 @@ namespace primersim{
             void evaluate_addresses(const char * in_filename, const char *out_filename, double dna_conc, double primer_conc, double mv_conc, double dv_conc, double dntp_conc);
             void eval_thread(const char * out_filename, double dna_conc, double primer_conc, double mv_conc, double dv_conc, double dntp_conc);
             //void sim_pcr_thread(unsigned int tid, unsigned int num_cpu, const char *out_filename, unsigned int addr, unsigned int pcr_cycles, double mv_conc, double dv_conc, double dntp_conc);
-            void sim_pcr(const char *in_filename, const char *out_filename, unsigned int addr, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc);
+            double sim_pcr(const char *out_filename, unsigned int addr, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc);
             double dhds_to_eq_const(double dhds[2], double temp_c);
+            void eval_addresses_thread(const char *out_filename, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc);
+            void eval_addresses(const char *out_filename, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc);
+            void shuffle_addresses(void);
     };
 }
 #endif

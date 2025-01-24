@@ -62,6 +62,8 @@ namespace primersim{
             mpfr_init2(k[i], FLOAT_PREC);
         mpfr_init2(spec_fwd_amp, FLOAT_PREC);
         mpfr_init2(spec_rev_amp, FLOAT_PREC);
+        mpfr_init2(spec_total, FLOAT_PREC);
+        mpfr_init2(nonspec_total, FLOAT_PREC);
         mpfr_init2(saved_frc_conc, FLOAT_PREC);
         mpfr_init2(saved_rrc_conc, FLOAT_PREC);
         mpfr_init2(nonspec_exp_amp, FLOAT_PREC);
@@ -102,6 +104,8 @@ namespace primersim{
         mpfr_clear(avg_nonspec_amp);
         mpfr_clear(last_nonspec_frc_total);
         mpfr_clear(last_nonspec_rrc_total);
+        mpfr_clear(spec_total);
+        mpfr_clear(nonspec_total);
     }
 
     void EQ::print_state(std::string out_filename, std::string s){
@@ -547,6 +551,7 @@ namespace primersim{
     }
 
     void Primeanneal::read_addresses(const char *filename, bool with_temp_c = false){
+        addresses.clear(); //TODO: Fix potential memory leak here.
         FILE *infile = fopen(filename, "r");
         address a;
         char tmp_f[100];
@@ -556,7 +561,7 @@ namespace primersim{
                 if(fscanf(infile, "%[ACGT],%[ACGT],%lf,%*[^\n]\n", tmp_f, tmp_r, &(a.temp_c)) == EOF)
                     break;
             } else {
-                if(fscanf(infile, "%[ACGT],%[ACGT]%*[^\n]\n", tmp_f, tmp_r) == EOF)
+                if(fscanf(infile, "%[ACGT],%[ACGT]%\n", tmp_f, tmp_r) == EOF)
                     break;
             }
             a.f = (char *)malloc(strlen(tmp_f)+1);
@@ -782,9 +787,9 @@ namespace primersim{
             t.join();
     }
 
-    void Primeanneal::sim_pcr(const char * in_filename, const char *out_filename, unsigned int addr, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc){
-        addresses.clear();
-        read_addresses(in_filename, true);
+    double Primeanneal::sim_pcr(const char *out_filename, unsigned int addr, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc){
+        //addresses.clear();
+        //read_addresses(in_filename, true);
         EQ eq;
         thal_args ta;
         thal_results o;
@@ -792,8 +797,10 @@ namespace primersim{
         ta.mv = mv_conc;
         ta.dv = dv_conc;
         ta.dntp = dntp_conc;
-        ta.temp = 273.15 + addresses[addr].temp_c;
-        double temp_c = addresses[addr].temp_c;
+        //ta.temp = 273.15 + addresses[addr].temp_c;
+        ta.temp = 273.15 + 55;
+        //double temp_c = addresses[addr].temp_c;
+        double temp_c = 55;
         eq.address_k_conc_vec.resize(addresses.size());
         mpfr_set_d(eq.last_nonspec_frc_total, 0., MPFR_RNDN);
         mpfr_set_d(eq.last_nonspec_rrc_total, 0., MPFR_RNDN);
@@ -860,19 +867,21 @@ namespace primersim{
         mpfr_set_d(eq.c0[F], primer_f_conc, MPFR_RNDN);
         mpfr_set_d(eq.c0[R], primer_r_conc, MPFR_RNDN);
 
-        FILE *outfile = fopen(out_filename, "w");
-        //cycle,f_primer,r_primer,spec_f,spec_r,nonspec_f,nonspec_r
-        mpfr_fprintf(outfile, "%02u,%lf,0.000000000,0.000000000,%.9Re,%.9Re,%.9Re,%.9Re", 0, temp_c_profile[0], eq.c0[F], eq.c0[R], eq.address_k_conc_vec[addr].fstrand[addr_end][addr_end], eq.address_k_conc_vec[addr].rstrand[addr_end][addr_end]);
-        mpfr_set_d(eq.tmp[0], 0., MPFR_RNDN);
-        mpfr_set_d(eq.tmp[1], 0., MPFR_RNDN);
-        for(unsigned int i = 0; i < addresses.size(); i++){
-            if (i == addr)
-                continue;
-            mpfr_add(eq.tmp[0], eq.tmp[0], eq.address_k_conc_vec[i].fstrand[addr_end][addr_end], MPFR_RNDN);
-            mpfr_add(eq.tmp[1], eq.tmp[1], eq.address_k_conc_vec[i].rstrand[addr_end][addr_end], MPFR_RNDN);
+        if(out_filename != NULL){
+            FILE *outfile = fopen(out_filename, "w");
+            //cycle,f_primer,r_primer,spec_f,spec_r,nonspec_f,nonspec_r
+            mpfr_fprintf(outfile, "%02u,%lf,0.000000000,0.000000000,%.9Re,%.9Re,%.9Re,%.9Re", 0, temp_c_profile[0], eq.c0[F], eq.c0[R], eq.address_k_conc_vec[addr].fstrand[addr_end][addr_end], eq.address_k_conc_vec[addr].rstrand[addr_end][addr_end]);
+            mpfr_set_d(eq.tmp[0], 0., MPFR_RNDN);
+            mpfr_set_d(eq.tmp[1], 0., MPFR_RNDN);
+            for(unsigned int i = 0; i < addresses.size(); i++){
+                if (i == addr)
+                    continue;
+                mpfr_add(eq.tmp[0], eq.tmp[0], eq.address_k_conc_vec[i].fstrand[addr_end][addr_end], MPFR_RNDN);
+                mpfr_add(eq.tmp[1], eq.tmp[1], eq.address_k_conc_vec[i].rstrand[addr_end][addr_end], MPFR_RNDN);
+            }
+            mpfr_fprintf(outfile, ",%.9Re,0.000000000,%.9Re,0.000000000\n", eq.tmp[0], eq.tmp[1]);
+            fclose(outfile);
         }
-        mpfr_fprintf(outfile, ",%.9Re,0.000000000,%.9Re,0.000000000\n", eq.tmp[0], eq.tmp[1]);
-        fclose(outfile);
         for(unsigned int cycle = 1; cycle <= pcr_cycles; cycle++){
             //calc c[F] and c[R]
             //eq.tmp[0] will hold the sum of the nonspecific concentrations
@@ -2463,13 +2472,19 @@ namespace primersim{
             mpfr_div(eq.tmp[1], eq.address_k_conc_vec[addr].total_r_conc, eq.address_k_conc_vec[addr].last_r_conc, MPFR_RNDN); 
             mpfr_sub_d(eq.tmp[1], eq.tmp[1], 1.0, MPFR_RNDN);
 
-            FILE *outfile = fopen(out_filename, "a");
-            //cycle,f_primer,r_primer,spec_f,spec_r,nonspec_f,nonspec_r
-            mpfr_fprintf(outfile, "%02u,%lf,%.9Rf,%.9Rf,%.9Re,%.9Re,%.9Re,%.9Re", cycle, temp_c_profile[cycle-1], eq.tmp[0], eq.tmp[1], eq.c0[F], eq.c0[R], eq.address_k_conc_vec[addr].total_f_conc, eq.address_k_conc_vec[addr].total_r_conc);
+            mpfr_add(eq.spec_total, eq.address_k_conc_vec[addr].total_f_conc, eq.address_k_conc_vec[addr].total_r_conc, MPFR_RNDN);
+
+            if(out_filename != NULL){
+                FILE *outfile = fopen(out_filename, "a");
+                //cycle,f_primer,r_primer,spec_f,spec_r,nonspec_f,nonspec_r
+                mpfr_fprintf(outfile, "%02u,%lf,%.9Rf,%.9Rf,%.9Re,%.9Re,%.9Re,%.9Re", cycle, temp_c_profile[cycle-1], eq.tmp[0], eq.tmp[1], eq.c0[F], eq.c0[R], eq.address_k_conc_vec[addr].total_f_conc, eq.address_k_conc_vec[addr].total_r_conc);
+                fclose(outfile);
+            }
             mpfr_set_d(eq.tmp[0], 0., MPFR_RNDN);
             mpfr_set_d(eq.tmp[1], 0., MPFR_RNDN);
             mpfr_set_d(eq.tmp[2], 0., MPFR_RNDN);
             mpfr_set_d(eq.tmp[3], 0., MPFR_RNDN);
+            mpfr_set_d(eq.nonspec_total, 0.0, MPFR_RNDN);
             for(unsigned int i = 0; i < addresses.size(); i++){
                 if (i == addr)
                     continue;
@@ -2477,6 +2492,8 @@ namespace primersim{
                 mpfr_add(eq.tmp[1], eq.tmp[1], eq.address_k_conc_vec[i].last_f_conc, MPFR_RNDN);
                 mpfr_add(eq.tmp[2], eq.tmp[2], eq.address_k_conc_vec[i].total_r_conc, MPFR_RNDN);
                 mpfr_add(eq.tmp[3], eq.tmp[3], eq.address_k_conc_vec[i].last_r_conc, MPFR_RNDN);
+                mpfr_add(eq.nonspec_total, eq.nonspec_total, eq.address_k_conc_vec[i].total_f_conc, MPFR_RNDN);
+                mpfr_add(eq.nonspec_total, eq.nonspec_total, eq.address_k_conc_vec[i].total_r_conc, MPFR_RNDN);
             }
             /*
             mpfr_add_d(eq.avg_nonspec_amp, eq.avg_nonspec_amp, 1.0, MPFR_RNDN);
@@ -2489,9 +2506,130 @@ namespace primersim{
             mpfr_sub_d(eq.tmp[3], eq.tmp[3], 1., MPFR_RNDN);
             mpfr_set(eq.last_nonspec_frc_total, eq.tmp[0], MPFR_RNDN);
             mpfr_set(eq.last_nonspec_rrc_total, eq.tmp[1], MPFR_RNDN);
-            mpfr_fprintf(outfile, ",%.9Re,%.9Rf,%.9Re,%.9Rf\n", eq.tmp[0], eq.tmp[1], eq.tmp[2], eq.tmp[3]);
+            if(out_filename != NULL){
+                FILE *outfile = fopen(out_filename, "a");
+                mpfr_fprintf(outfile, ",%.9Re,%.9Rf,%.9Re,%.9Rf\n", eq.tmp[0], eq.tmp[1], eq.tmp[2], eq.tmp[3]);
+                fclose(outfile);
+            }
+        }
+
+        mpfr_div(eq.tmp[0], eq.spec_total, eq.nonspec_total, MPFR_RNDN);
+        return mpfr_get_d(eq.tmp[0], MPFR_RNDN);
+    }
+
+
+    void Primeanneal::eval_addresses_thread(const char *out_filename, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc){
+        while(true){
+            unsigned int i;
+            addr_mtx.lock();
+            i = address_index;
+            address_index++;
+            addr_mtx.unlock();
+            if(i >= addresses.size())
+                break;
+            double ratio = sim_pcr(NULL, i, temp_c_profile.size(), temp_c_profile, dna_conc, primer_f_conc, primer_r_conc, mv_conc, dv_conc, dntp_conc);
+            outfile_mtx.lock();
+            FILE *outfile = fopen(out_filename, "a");
+            fprintf(outfile, "%u,%e\n", i, ratio);
             fclose(outfile);
+            outfile_mtx.unlock();
         }
     }
 
+    void Primeanneal::eval_addresses(const char *out_filename, unsigned int pcr_cycles, const std::vector<double> &temp_c_profile, double dna_conc, double primer_f_conc, double primer_r_conc, double mv_conc, double dv_conc, double dntp_conc){
+        address_index = 0;
+        std::vector<std::thread> threads;
+        address_index = 0;
+        for(unsigned int i = 0; i < num_cpu; i++){
+            threads.push_back(std::thread(&Primeanneal::eval_addresses_thread, this, out_filename, temp_c_profile.size(), temp_c_profile,  dna_conc, primer_f_conc, primer_r_conc, mv_conc, dv_conc, dntp_conc));
+        }
+
+        for (auto &t : threads)
+            t.join();
+
+    }
+    
+    void Primeanneal::shuffle_addresses(void){
+        int dest_idx;
+        int dest_rc;
+        int dest_fr;
+        for(unsigned int i = 0; i < addresses.size(); i++){
+            char *tmp;
+
+            dest_idx = std::rand() % addresses.size();
+            dest_rc = std::rand() % 2;
+            dest_fr = std::rand() % 2;
+
+            if(!dest_rc && !dest_fr){
+                tmp = addresses[dest_idx].f;
+                addresses[dest_idx].f = addresses[i].f;
+                addresses[i].f = tmp;
+                tmp = addresses[dest_idx].f_rc;
+                addresses[dest_idx].f_rc = addresses[i].f_rc;
+                addresses[i].f_rc = tmp;
+            }
+            if(!dest_rc && dest_fr){
+                tmp = addresses[dest_idx].r;
+                addresses[dest_idx].r = addresses[i].f;
+                addresses[i].f = tmp;
+                tmp = addresses[dest_idx].r_rc;
+                addresses[dest_idx].r_rc = addresses[i].f_rc;
+                addresses[i].f_rc = tmp;
+            }
+            if(dest_rc && !dest_fr){
+                tmp = addresses[dest_idx].f_rc;
+                addresses[dest_idx].f_rc = addresses[i].f;
+                addresses[i].f = tmp;
+                tmp = addresses[dest_idx].f;
+                addresses[dest_idx].f = addresses[i].f_rc;
+                addresses[i].f_rc = tmp;
+            }
+            if(dest_rc && dest_fr){
+                tmp = addresses[dest_idx].r;
+                addresses[dest_idx].r = addresses[i].f;
+                addresses[i].f = tmp;
+                tmp = addresses[dest_idx].r_rc;
+                addresses[dest_idx].r_rc = addresses[i].f_rc;
+                addresses[i].f_rc = tmp;
+            }
+
+            dest_idx = std::rand() % addresses.size();
+            dest_rc = std::rand() % 2;
+            dest_fr = std::rand() % 2;
+
+            if(!dest_rc && !dest_fr){
+                tmp = addresses[dest_idx].f;
+                addresses[dest_idx].f = addresses[i].r;
+                addresses[i].r = tmp;
+                tmp = addresses[dest_idx].f_rc;
+                addresses[dest_idx].f_rc = addresses[i].r_rc;
+                addresses[i].r_rc = tmp;
+            }
+            if(!dest_rc && dest_fr){
+                tmp = addresses[dest_idx].r;
+                addresses[dest_idx].r = addresses[i].r;
+                addresses[i].r = tmp;
+                tmp = addresses[dest_idx].r_rc;
+                addresses[dest_idx].r_rc = addresses[i].r_rc;
+                addresses[i].r_rc = tmp;
+            }
+            if(dest_rc && !dest_fr){
+                tmp = addresses[dest_idx].f_rc;
+                addresses[dest_idx].f_rc = addresses[i].r;
+                addresses[i].r = tmp;
+                tmp = addresses[dest_idx].f;
+                addresses[dest_idx].f = addresses[i].r_rc;
+                addresses[i].r_rc = tmp;
+            }
+            if(dest_rc && dest_fr){
+                tmp = addresses[dest_idx].r;
+                addresses[dest_idx].r = addresses[i].r;
+                addresses[i].r = tmp;
+                tmp = addresses[dest_idx].r_rc;
+                addresses[dest_idx].r_rc = addresses[i].r_rc;
+                addresses[i].r_rc = tmp;
+            }
+        }
+    }
 }
+
